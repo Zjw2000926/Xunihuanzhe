@@ -1,0 +1,27 @@
+# 环境变量（含密钥，绝对不能提交）
+.env
+
+# 数据库文件
+*.db
+*.db-wal
+*.db-shm
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+venv/
+
+# Node
+node_modules/
+frontend/dist/
+
+# IDE
+.vscode/
+.idea/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+desktop.ini
