@@ -8,7 +8,6 @@ from auth import get_current_user
 from services.llm_service import call_llm, call_llm_stream, build_patient_system_prompt
 from services.patient_guard import (
     get_allowed_hidden_info, get_revealed_topics, sanitize_patient_reply,
-    normalize_addressing_to_nurse,
 )
 from config import LLM_CHAT_TIMEOUT, LLM_CHAT_MAX_TOKENS
 from rate_limiter import check_chat_limit
@@ -123,9 +122,6 @@ async def send_message_stream(
 
     async def generate():
         full_reply = ""
-        first_buffer = ""       # 首段缓冲，防止流式中出现错误称呼
-        buffer_released = False
-        SENTENCE_BREAK = {",", "，", "。", ".", "!", "！", "?", "？", "\n", " "}
         try:
             async for chunk in call_llm_stream(
                 llm_messages, temperature=0.6,
@@ -134,27 +130,14 @@ async def send_message_stream(
                 record_id=record_id, case_id=record.case_id,
             ):
                 full_reply += chunk
+                yield f"data: {json.dumps({'content': chunk}, ensure_ascii=False)}\n\n"
 
-                if not buffer_released:
-                    first_buffer += chunk
-                    # 缓冲到 12 字或遇到句读后释放
-                    if len(first_buffer) >= 12 or any(c in first_buffer for c in SENTENCE_BREAK):
-                        buffer_released = True
-                        # 对全量回复做称谓归一化后一次性输出
-                        fixed, _was = normalize_addressing_to_nurse(full_reply)
-                        yield f"data: {json.dumps({'content': fixed}, ensure_ascii=False)}\n\n"
-                else:
-                    yield f"data: {json.dumps({'content': chunk}, ensure_ascii=False)}\n\n"
-
-            # 如果回复极短（<12字且无句读），缓冲区可能未释放
-            if not buffer_released and full_reply:
-                fixed, _was = normalize_addressing_to_nurse(full_reply)
-                yield f"data: {json.dumps({'content': fixed}, ensure_ascii=False)}\n\n"
-
-            # 角色守卫：检测越界并替换
+            # 全部接收完后，做完整角色守卫检查（含称谓归一化、越界检测、诊断化检测）
             sanitized, violations = sanitize_patient_reply(full_reply, case_data)
             if violations:
                 log_info("patient_guard", extra={"record_id": record_id, "violations": violations})
+                # 通知前端用兜底内容替换已显示内容
+                yield f"data: {json.dumps({'sanitized': True, 'reply': sanitized, 'violations': violations}, ensure_ascii=False)}\n\n"
 
             student_msg = Message(record_id=record_id, role="student", content=req.content)
             db.add(student_msg)

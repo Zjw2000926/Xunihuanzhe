@@ -20,6 +20,9 @@ _MAX_REQUEST_BYTES = int(os.getenv("MAX_REQUEST_BYTES", str(10 * 1024 * 1024))) 
 async def lifespan(app: FastAPI):
     init_db()
     _seed_data()
+    # 启动 LLM 日志消费者
+    from services.llm_logging import start_worker, stop_worker
+    await start_worker()
     # 限流器后台清理（每 10 分钟）
     from rate_limiter import _limiter as rate_limiter
     async def _cleanup_loop():
@@ -29,6 +32,7 @@ async def lifespan(app: FastAPI):
     cleanup_task = asyncio.create_task(_cleanup_loop())
     yield
     cleanup_task.cancel()
+    await stop_worker()
     # 关闭共享 httpx 客户端
     from services.llm_service import _shared_client
     if _shared_client:
@@ -195,6 +199,6 @@ def _seed_data():
                 db.add(case)
 
         db.commit()
-        print("种子数据初始化完成")
+        audit_logger.info("种子数据初始化完成")
     finally:
         db.close()

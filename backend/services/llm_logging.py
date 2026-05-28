@@ -1,13 +1,16 @@
-"""LLM 调用日志服务 —— 独立 DB session，与业务 session 解耦"""
+"""LLM 调用日志服务 —— 异步队列批量写入，独立 DB session"""
+import asyncio
 from database import SessionLocal
 from config import (
     DEEPSEEK_MODEL,
     LLM_PRICE_INPUT_PER_1M, LLM_PRICE_OUTPUT_PER_1M, LLM_COST_CURRENCY,
 )
 
+_log_queue: asyncio.Queue[dict] | None = None
+_worker_task: asyncio.Task | None = None
+
 
 def _estimate_tokens(text: str) -> int:
-    """中文场景粗略 token 估算，保守按 1.5 字符 ≈ 1 token"""
     if not text:
         return 0
     return max(1, int(len(text) / 1.5))
@@ -20,26 +23,10 @@ def _estimate_cost(prompt_tokens: int, completion_tokens: int) -> float:
             + completion_tokens / 1_000_000 * LLM_PRICE_OUTPUT_PER_1M)
 
 
-def log_llm_call(
-    *,
-    purpose: str,
-    user_id: int | None = None,
-    record_id: int | None = None,
-    case_id: int | None = None,
-    model: str = DEEPSEEK_MODEL,
-    temperature: float | None = None,
-    max_tokens: int | None = None,
-    latency_ms: int = 0,
-    status: str = "success",
-    error_type: str | None = None,
-    error_message: str | None = None,
-    request_text: str = "",
-    response_text: str = "",
-    usage: dict | None = None,
-    meta: dict | None = None,
-):
-    """异步安全：使用独立 DB session 快速写入日志"""
-    # 估算 token
+def _build_entry(*, purpose, user_id, record_id, case_id, model, temperature,
+                 max_tokens, latency_ms, status, error_type, error_message,
+                 request_text, response_text, usage, meta):
+    """构建 LLMCallLog 条目字典"""
     if usage:
         prompt_tokens = usage.get("prompt_tokens")
         completion_tokens = usage.get("completion_tokens")
@@ -53,35 +40,95 @@ def log_llm_call(
 
     estimated_cost = _estimate_cost(prompt_tokens or 0, completion_tokens or 0)
 
-    db = SessionLocal()
+    return {
+        "user_id": user_id,
+        "record_id": record_id,
+        "case_id": case_id,
+        "purpose": purpose,
+        "provider": "deepseek",
+        "model": model or DEEPSEEK_MODEL,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": total_tokens,
+        "token_estimated": token_estimated,
+        "estimated_cost": round(estimated_cost, 6),
+        "cost_currency": LLM_COST_CURRENCY,
+        "latency_ms": latency_ms,
+        "status": status,
+        "error_type": error_type,
+        "error_message": (error_message or "")[:500] if error_message else None,
+        "request_chars": len(request_text) if request_text else None,
+        "response_chars": len(response_text) if response_text else None,
+        "meta": meta,
+    }
+
+
+async def start_worker():
+    global _log_queue, _worker_task
+    _log_queue = asyncio.Queue(maxsize=500)
+    _worker_task = asyncio.create_task(_worker_loop())
+
+
+async def stop_worker():
+    global _log_queue, _worker_task
+    if _worker_task:
+        _worker_task.cancel()
+        try:
+            await _worker_task
+        except asyncio.CancelledError:
+            pass
+        _worker_task = None
+    _log_queue = None
+
+
+async def _worker_loop():
+    from models import LLMCallLog
+    batch: list[dict] = []
+    while True:
+        try:
+            item = await asyncio.wait_for(_log_queue.get(), timeout=2.0)
+            batch.append(item)
+        except asyncio.TimeoutError:
+            pass
+        except asyncio.CancelledError:
+            break
+
+        if len(batch) >= 20:
+            _flush_batch(batch)
+            batch.clear()
+
+    if batch:
+        _flush_batch(batch)
+
+
+def _flush_batch(items: list[dict]):
     try:
-        from models import LLMCallLog
-        log_entry = LLMCallLog(
-            user_id=user_id,
-            record_id=record_id,
-            case_id=case_id,
-            purpose=purpose,
-            provider="deepseek",
-            model=model,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            total_tokens=total_tokens,
-            token_estimated=token_estimated,
-            estimated_cost=round(estimated_cost, 6),
-            cost_currency=LLM_COST_CURRENCY,
-            latency_ms=latency_ms,
-            status=status,
-            error_type=error_type,
-            error_message=(error_message or "")[:500] if error_message else None,
-            request_chars=len(request_text) if request_text else None,
-            response_chars=len(response_text) if response_text else None,
-            meta=meta,
-        )
-        db.add(log_entry)
+        db = SessionLocal()
+        for item in items:
+            db.add(LLMCallLog(**item))
         db.commit()
     except Exception:
         db.rollback()
     finally:
         db.close()
+
+
+def enqueue_log(*, purpose, user_id=None, record_id=None, case_id=None,
+                model=DEEPSEEK_MODEL, temperature=None, max_tokens=None,
+                latency_ms=0, status="success", error_type=None, error_message=None,
+                request_text="", response_text="", usage=None, meta=None):
+    if _log_queue is None:
+        return
+    entry = _build_entry(
+        purpose=purpose, user_id=user_id, record_id=record_id, case_id=case_id,
+        model=model, temperature=temperature, max_tokens=max_tokens,
+        latency_ms=latency_ms, status=status, error_type=error_type,
+        error_message=error_message, request_text=request_text,
+        response_text=response_text, usage=usage, meta=meta,
+    )
+    try:
+        _log_queue.put_nowait(entry)
+    except asyncio.QueueFull:
+        pass

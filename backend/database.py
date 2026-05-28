@@ -1,8 +1,11 @@
+import logging
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.pool import QueuePool
 
 from config import DATABASE_URL
+
+logger = logging.getLogger("alembic")
 
 engine = create_engine(
     DATABASE_URL,
@@ -53,8 +56,8 @@ def init_db():
             # 确保复合索引存在（Alembic 可能未捕获 create_all 中添加的手动索引）
             _ensure_indexes()
             return
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Alembic 迁移失败，回退到 create_all: %s", e)
 
     Base.metadata.create_all(bind=engine)
     _ensure_indexes()

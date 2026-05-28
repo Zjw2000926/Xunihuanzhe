@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class LoginRequest(BaseModel):
@@ -31,8 +31,7 @@ class CaseBrief(BaseModel):
     description: Optional[str]
     patient_summary: Optional[dict] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CaseDetail(BaseModel):
@@ -41,8 +40,7 @@ class CaseDetail(BaseModel):
     description: Optional[str]
     case_data: dict
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TrainingStartRequest(BaseModel):
@@ -70,8 +68,7 @@ class MessageItem(BaseModel):
     content: str
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ScoreItem(BaseModel):
@@ -92,8 +89,7 @@ class ScoreItem(BaseModel):
     review_comment: Optional[str] = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class NoteItem(BaseModel):
@@ -102,8 +98,7 @@ class NoteItem(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class NoteCreateRequest(BaseModel):
@@ -123,8 +118,7 @@ class TrainingRecordBrief(BaseModel):
     end_time: Optional[datetime]
     score_total: Optional[float] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TrainingRecordDetail(BaseModel):
@@ -143,8 +137,7 @@ class TrainingRecordDetail(BaseModel):
     notes: List[NoteItem] = []
     required_inquiries: Optional[list] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserBrief(BaseModel):
@@ -155,8 +148,7 @@ class UserBrief(BaseModel):
     student_id: Optional[str]
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AdminStats(BaseModel):
@@ -210,8 +202,7 @@ class CaseManageItem(BaseModel):
     created_at: datetime
     training_count: int = 0
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserUpdateRequest(BaseModel):
@@ -272,8 +263,7 @@ class LLMCallLogItem(BaseModel):
     case_name: Optional[str] = None
     is_aggregated: bool = False
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class LLMStatsResponse(BaseModel):

@@ -3,6 +3,8 @@
 纯 Python 规则检测 —— 不增加 LLM 调用，不拖慢回复速度。
 """
 
+import re
+
 # 角色越界关键词（患者不应使用）
 ROLE_LEAK_PATTERNS = [
     "作为护士", "作为医生", "作为老师", "作为AI", "我是AI",
@@ -123,7 +125,8 @@ ADDRESSING_SKIP_PREFIXES = ["医生说", "医生让我", "医生给我", "医生
 def normalize_addressing_to_nurse(reply: str) -> tuple[str, bool]:
     """将患者对学生的直接称呼从'医生/大夫/医师'归一化为'护士'
 
-    只处理回复开头，不替换病史语境中的医生称谓。
+    使用正则匹配开头任意非中文字符后的称谓，覆盖"啊，医生你好"等部分匹配情况。
+    不替换病史语境中的医生称谓（如"医生说""以前医生"等）。
     返回 (normalized_reply, was_normalized)
     """
     if not reply or not reply.strip():
@@ -131,15 +134,21 @@ def normalize_addressing_to_nurse(reply: str) -> tuple[str, bool]:
 
     text = reply.strip()
 
-    # 跳过病史语境：如果开头是"医生说""以前医生"等，不替换
+    # 跳过病史语境
     for prefix in ADDRESSING_SKIP_PREFIXES:
         if text.startswith(prefix):
             return reply, False
 
-    # 尝试开头称谓替换
-    for old, new in ADDRESSING_REPLACEMENTS:
-        if text.startswith(old):
-            normalized = new + text[len(old):]
+    # 正则匹配开头任意非中文字符后跟"医生/大夫/医师"+ 问候/标点
+    for title in ["医生", "大夫", "医师"]:
+        m = re.match(
+            r'^([^\u4e00-\u9fff]*)' + re.escape(title) + r'(你好|您好|，|,)',
+            text
+        )
+        if m:
+            prefix_chars = m.group(1)
+            suffix = m.group(2)
+            normalized = prefix_chars + "护士" + suffix + text[m.end():]
             return normalized, True
 
     return reply, False

@@ -255,3 +255,22 @@ class TestRecords:
             headers={"Authorization": f"Bearer {token}"},
         )
         assert resp.status_code == 404
+
+
+class TestScoreReview:
+    def test_get_review_requires_teacher(self, client, student, test_case, db_session):
+        _, token = student
+        resp = client.get(
+            "/api/training/records/99999/review",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code == 403
+
+    def test_submit_review_requires_teacher(self, client, student, test_case, db_session):
+        _, token = student
+        resp = client.post(
+            "/api/training/records/99999/review",
+            json={"comment": "test"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code == 403

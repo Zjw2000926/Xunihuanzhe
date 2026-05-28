@@ -1,4 +1,5 @@
 import asyncio
+import threading
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, BackgroundTasks
 from sqlalchemy.orm import Session, joinedload
@@ -9,10 +10,29 @@ from schemas import (
     TrainingStartRequest, TrainingStartResponse, TrainingRecordBrief,
     TrainingRecordDetail, ScoreReviewRequest, ScoreReviewResponse,
 )
-from auth import get_current_user
+from auth import get_current_user, require_teacher
 from logger import log_info, audit_logger
 
 router = APIRouter(prefix="/api/training", tags=["训练"])
+
+# 评分并发锁：防止同一 record 触发多次评分
+_scoring_pending: set[int] = set()
+_scoring_pending_lock = threading.Lock()
+
+
+def _try_acquire_scoring(record_id: int) -> bool:
+    """尝试标记评分进行中，失败表示已有任务在处理"""
+    with _scoring_pending_lock:
+        if record_id in _scoring_pending:
+            return False
+        _scoring_pending.add(record_id)
+        return True
+
+
+def _release_scoring(record_id: int):
+    """评分任务完成或失败后释放"""
+    with _scoring_pending_lock:
+        _scoring_pending.discard(record_id)
 
 
 @router.post("/start", response_model=TrainingStartResponse)
@@ -48,7 +68,13 @@ def start_training(req: TrainingStartRequest, current_user: User = Depends(get_c
 
 
 def _run_scoring_background(record_id: int, case_data: dict):
-    """后台线程中执行评分（新建 event loop 运行异步评分逻辑）"""
+    """后台线程中执行评分。使用 asyncio.run() 新建事件循环，因为:
+    - BackgroundTasks 对 sync 函数会在线程池执行
+    - 评分涉及 LLM 调用（async），需事件循环
+    - 若直接设为 async 函数则会阻塞主事件循环（评分耗时 30-120s）
+    """
+    SCORING_GLOBAL_TIMEOUT = 300  # 5 分钟全局超时
+
     async def _do():
         db = SessionLocal()
         try:
@@ -59,12 +85,25 @@ def _run_scoring_background(record_id: int, case_data: dict):
             db.commit()
 
             from services.scoring import evaluate_training
-            await evaluate_training(record_id, case_data, db)
+            await asyncio.wait_for(
+                evaluate_training(record_id, case_data, db),
+                timeout=SCORING_GLOBAL_TIMEOUT,
+            )
 
             record.scoring_status = "completed"
             record.scoring_error = None
             db.commit()
             audit_logger.info("评分完成", extra={"record_id": record_id, "scoring_status": "completed"})
+        except asyncio.TimeoutError:
+            try:
+                record = db.query(TrainingRecord).filter(TrainingRecord.id == record_id).first()
+                if record:
+                    record.scoring_status = "failed"
+                    record.scoring_error = "评分超时（超过5分钟）"
+                    db.commit()
+            except Exception:
+                pass
+            audit_logger.error("评分超时", extra={"record_id": record_id})
         except Exception as e:
             try:
                 record = db.query(TrainingRecord).filter(TrainingRecord.id == record_id).first()
@@ -78,7 +117,10 @@ def _run_scoring_background(record_id: int, case_data: dict):
         finally:
             db.close()
 
-    asyncio.run(_do())
+    try:
+        asyncio.run(_do())
+    finally:
+        _release_scoring(record_id)
 
 
 @router.post("/{record_id}/end")
@@ -97,6 +139,9 @@ def end_training(
         raise HTTPException(status_code=400, detail="训练已结束")
     if record.scoring_status in ("pending", "processing"):
         raise HTTPException(status_code=400, detail="评分正在进行中，请稍后查看")
+
+    if not _try_acquire_scoring(record_id):
+        raise HTTPException(status_code=409, detail="评分已被其他请求触发，请刷新查看")
 
     case = db.query(Case).filter(Case.id == record.case_id).first()
 
@@ -134,8 +179,18 @@ def retry_scoring(
         raise HTTPException(status_code=403, detail="无权操作此记录")
     if record.status != "completed":
         raise HTTPException(status_code=400, detail="训练尚未结束")
-    if record.scoring_status in ("pending", "processing"):
+    if record.scoring_status == "pending":
         raise HTTPException(status_code=400, detail="评分正在进行中，请稍后重试")
+    if record.scoring_status == "processing":
+        # 检查是否超时（超过 5 分钟仍 processing，视为僵尸状态）
+        if record.end_time and (datetime.now(timezone.utc) - record.end_time).total_seconds() > 300:
+            record.scoring_status = "failed"
+            db.commit()
+        else:
+            raise HTTPException(status_code=400, detail="评分正在进行中，请稍后重试")
+
+    if not _try_acquire_scoring(record_id):
+        raise HTTPException(status_code=409, detail="评分已被其他请求触发，请稍后重试")
 
     case = db.query(Case).filter(Case.id == record.case_id).first()
     record.scoring_status = "pending"
@@ -280,7 +335,7 @@ def delete_record(record_id: int, current_user: User = Depends(get_current_user)
 @router.get("/records/{record_id}/review", response_model=ScoreReviewResponse)
 def get_score_review(
     record_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_teacher),
     db: Session = Depends(get_db),
 ):
     score = db.query(Score).filter(Score.record_id == record_id).first()
@@ -307,7 +362,7 @@ def get_score_review(
 def submit_score_review(
     record_id: int,
     req: ScoreReviewRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_teacher),
     db: Session = Depends(get_db),
 ):
     score = db.query(Score).filter(Score.record_id == record_id).first()
@@ -316,6 +371,12 @@ def submit_score_review(
 
     if req.detail_scores is not None:
         score.review_detail_scores = req.detail_scores
+        # 重算总分：累加所有维度 score
+        new_total = 0.0
+        for dim_data in req.detail_scores.values():
+            if isinstance(dim_data, dict):
+                new_total += dim_data.get("score", 0)
+        score.total_score = round(new_total, 1)
     if req.comment is not None:
         score.review_comment = req.comment
 

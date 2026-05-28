@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, Integer as SAInteger
 from database import get_db
@@ -57,7 +57,6 @@ def delete_user(
     user_id: int,
     current_user: User = Depends(require_teacher),
     db: Session = Depends(get_db),
-    request: Request = None,
 ):
     if user_id == current_user.id:
         raise HTTPException(status_code=400, detail="不能删除自己")

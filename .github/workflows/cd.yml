@@ -50,6 +50,7 @@ jobs:
           tags: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/xunihuanzhe-backend:${{ steps.meta.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: false
 
       - name: Build & push frontend
         uses: docker/build-push-action@v6
@@ -60,6 +61,7 @@ jobs:
           tags: ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/xunihuanzhe-frontend:${{ steps.meta.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: false
 
   deploy:
     needs: build
@@ -112,30 +114,34 @@ jobs:
             docker pull "$IMG_FRONTEND" 2>/dev/null || true
 
             # 生成部署 compose 文件（自动填入镜像标签）
-            cat > docker-compose.yml << COMPOSE
-          services:
-            backend:
-              image: $IMG_BACKEND
-              ports: ["8000:8000"]
-              volumes:
-                - db_data:/app/data
-                - ./cases:/app/cases:ro
-              env_file: [.env]
-              environment:
-                - DATABASE_URL=sqlite:///data/data.db
-              restart: unless-stopped
-
-            frontend:
-              image: $IMG_FRONTEND
-              ports: ["80:80"]
-              depends_on:
-                backend:
-                  condition: service_healthy
-              restart: unless-stopped
-
-          volumes:
-            db_data:
-          COMPOSE
+            printf '%s\n' \
+              'services:' \
+              '  backend:' \
+              "    image: $IMG_BACKEND" \
+              '    ports: ["8000:8000"]' \
+              '    volumes:' \
+              '      - db_data:/app/data' \
+              '      - ./cases:/app/cases:ro' \
+              '    env_file: [.env]' \
+              '    environment:' \
+              '      - DATABASE_URL=sqlite:///data/data.db' \
+              '    restart: unless-stopped' \
+              '    healthcheck:' \
+              '      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]' \
+              '      interval: 30s' \
+              '      timeout: 5s' \
+              '      retries: 3' \
+              '      start_period: 10s' \
+              '  frontend:' \
+              "    image: $IMG_FRONTEND" \
+              '    ports: ["80:80"]' \
+              '    depends_on:' \
+              '      backend:' \
+              '        condition: service_healthy' \
+              '    restart: unless-stopped' \
+              'volumes:' \
+              '  db_data:' \
+              > docker-compose.yml
 
             # 平滑重启
             docker compose down --timeout 30

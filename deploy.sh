@@ -79,31 +79,29 @@ if [ "$MODE" = "prod" ]; then
   docker pull "$IMG_BACKEND"
   docker pull "$IMG_FRONTEND"
 
-  # 生成 compose 文件
-  cat > docker-compose.yml << COMPOSE
-services:
-  backend:
-    image: $IMG_BACKEND
-    ports: ["8000:8000"]
-    volumes:
-      - db_data:/app/data
-      - ./cases:/app/cases:ro
-    env_file: [.env]
-    environment:
-      - DATABASE_URL=sqlite:///data/data.db
-    restart: unless-stopped
-
-  frontend:
-    image: $IMG_FRONTEND
-    ports: ["80:80"]
-    depends_on:
-      backend:
-        condition: service_healthy
-    restart: unless-stopped
-
-volumes:
-  db_data:
-COMPOSE
+  # 生成 compose 文件（使用 printf 避免 heredoc 缩进问题）
+  printf '%s\n' \
+    'services:' \
+    '  backend:' \
+    "    image: $IMG_BACKEND" \
+    '    ports: ["8000:8000"]' \
+    '    volumes:' \
+    '      - db_data:/app/data' \
+    '      - ./cases:/app/cases:ro' \
+    '    env_file: [.env]' \
+    '    environment:' \
+    '      - DATABASE_URL=sqlite:///data/data.db' \
+    '    restart: unless-stopped' \
+    '  frontend:' \
+    "    image: $IMG_FRONTEND" \
+    '    ports: ["80:80"]' \
+    '    depends_on:' \
+    '      backend:' \
+    '        condition: service_healthy' \
+    '    restart: unless-stopped' \
+    'volumes:' \
+    '  db_data:' \
+    > docker-compose.yml
 
   docker compose down --timeout 30
   docker compose up -d
