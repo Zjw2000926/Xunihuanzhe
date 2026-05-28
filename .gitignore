@@ -21,6 +21,12 @@ frontend/dist/
 .vscode/
 .idea/
 
+# 日志
+logs/
+
+# 备份
+backups/
+
 # 系统文件
 .DS_Store
 Thumbs.db
