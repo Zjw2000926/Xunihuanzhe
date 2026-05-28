@@ -1,0 +1,38 @@
+# 生产部署：使用预构建镜像，无需本地编译
+# 使用方式：
+#   1. 登录 GHCR: echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
+#   2. 启动: docker compose -f docker-compose.prod.yml up -d
+#
+# 镜像由 GitHub Actions CD 在 tag push (v*) 时自动构建并推送
+
+services:
+  backend:
+    image: ghcr.io/zjw2000926/xunihuanzhe-backend:v1.17.0
+    ports:
+      - "8000:8000"
+    volumes:
+      - db_data:/app/data
+      - ./backend/cases:/app/cases:ro
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=sqlite:///data/data.db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    image: ghcr.io/zjw2000926/xunihuanzhe-frontend:v1.17.0
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  db_data:
