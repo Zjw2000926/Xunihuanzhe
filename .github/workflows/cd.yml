@@ -66,7 +66,7 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
-    if: vars.SSH_HOST != ''     # 仅配置了服务器时才执行
+    if: secrets.SSH_HOST != ''     # 仅配置了服务器时才执行
     env:
       DEPLOY_DIR: /opt/xunihuanzhe
       IMG_BACKEND: ghcr.io/${{ needs.build.outputs.owner_lc }}/xunihuanzhe-backend:${{ needs.build.outputs.version }}
@@ -82,8 +82,8 @@ jobs:
       - name: Deploy to server
         run: |
           set -e
-          HOST="${{ vars.SSH_HOST }}"
-          USER="${{ vars.SSH_USER }}"
+          HOST="${{ secrets.SSH_HOST }}"
+          USER="${{ secrets.SSH_USER }}"
 
           # 添加服务器 host key
           ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
