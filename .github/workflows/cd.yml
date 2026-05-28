@@ -55,8 +55,8 @@ jobs:
     if: vars.SSH_HOST != ''     # 仅配置了服务器时才执行
     env:
       DEPLOY_DIR: /opt/xunihuanzhe
-      IMG_BACKEND: ${{ env.REGISTRY }}/${{ github.repository_owner }}/xunihuanzhe-backend:${{ needs.build.outputs.version }}
-      IMG_FRONTEND: ${{ env.REGISTRY }}/${{ github.repository_owner }}/xunihuanzhe-frontend:${{ needs.build.outputs.version }}
+      IMG_BACKEND: ghcr.io/${{ github.repository_owner }}/xunihuanzhe-backend:${{ needs.build.outputs.version }}
+      IMG_FRONTEND: ghcr.io/${{ github.repository_owner }}/xunihuanzhe-frontend:${{ needs.build.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
