@@ -32,8 +32,8 @@ if [ "$MODE" = "setup" ]; then
     echo "# 请填入你的 DeepSeek API Key" > .env
     echo "DEEPSEEK_API_KEY=sk-your-key-here" >> .env
     echo "SECRET_KEY=$(openssl rand -hex 32)" >> .env
-    echo "CORS_ORIGINS=http://localhost" >> .env
-    echo ">> .env 已生成，请编辑填入正确的 DEEPSEEK_API_KEY"
+    echo "CORS_ORIGINS=https://你的域名.com" >> .env
+    echo ">> .env 已生成，请编辑填入正确的 DEEPSEEK_API_KEY 和 CORS_ORIGINS"
   fi
 
   # 拷贝病例文件
@@ -65,7 +65,7 @@ fi
 # ── 生产部署（使用 GHCR 预构建镜像） ──
 if [ "$MODE" = "prod" ]; then
   echo "=== 生产部署: $VERSION ==="
-  REPO="${GITHUB_REPOSITORY_OWNER:-zjw2000926}"
+  REPO="${GITHUB_REPOSITORY_OWNER:-fire-disposal}"
   IMG_BACKEND="ghcr.io/$REPO/xunihuanzhe-backend:$VERSION"
   IMG_FRONTEND="ghcr.io/$REPO/xunihuanzhe-frontend:$VERSION"
 
@@ -84,7 +84,7 @@ if [ "$MODE" = "prod" ]; then
     'services:' \
     '  backend:' \
     "    image: $IMG_BACKEND" \
-    '    ports: ["8000:8000"]' \
+    '    ports: ["127.0.0.1:9001:8000"]' \
     '    volumes:' \
     '      - db_data:/app/data' \
     '      - ./cases:/app/cases:ro' \
@@ -94,7 +94,7 @@ if [ "$MODE" = "prod" ]; then
     '    restart: unless-stopped' \
     '  frontend:' \
     "    image: $IMG_FRONTEND" \
-    '    ports: ["80:80"]' \
+    '    ports: ["9000:80"]' \
     '    depends_on:' \
     '      backend:' \
     '        condition: service_healthy' \

@@ -17,9 +17,9 @@
 
 services:
   backend:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-zjw2000926}/xunihuanzhe-backend:${VERSION:-latest}
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-fire-disposal}/xunihuanzhe-backend:${VERSION:-latest}
     ports:
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:9001:8000"
     volumes:
       - db_data:/app/data          # 具名卷 — 数据永久保存
       - ./cases:/app/cases:ro      # 病例文件只读
@@ -36,7 +36,7 @@ services:
       start_period: 15s
 
   frontend:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-zjw2000926}/xunihuanzhe-frontend:${VERSION:-latest}
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-fire-disposal}/xunihuanzhe-frontend:${VERSION:-latest}
     ports:
       - "9000:80"
     depends_on:

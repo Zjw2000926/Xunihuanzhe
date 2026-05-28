@@ -88,22 +88,24 @@ jobs:
           # 添加服务器 host key
           ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
 
-          ssh "$USER@$HOST" << 'DEPLOY'
+          # 展开本地变量后通过 SSH 执行
+          ssh "$USER@$HOST" << DEPLOY
             set -e
             DEPLOY_DIR="/opt/xunihuanzhe"
 
             # 首次部署：自动创建目录结构
-            sudo mkdir -p "$DEPLOY_DIR/cases" "$DEPLOY_DIR/backups"
-            sudo chown -R "$USER:$USER" "$DEPLOY_DIR"
+            sudo mkdir -p "\$DEPLOY_DIR/cases" "\$DEPLOY_DIR/backups"
+            sudo chown -R "\$USER:\$USER" "\$DEPLOY_DIR"
 
-            cd "$DEPLOY_DIR"
+            cd "\$DEPLOY_DIR"
 
             # 创建 .env（如果不存在，需要手动填入 API Key）
             if [ ! -f .env ]; then
               echo "# 请填入 DeepSeek API Key" > .env
               echo "DEEPSEEK_API_KEY=sk-your-key-here" >> .env
-              echo "SECRET_KEY=$(openssl rand -hex 32)" >> .env
-              echo ">> 已生成 .env 模板，请编辑填入 DEEPSEEK_API_KEY"
+              echo "SECRET_KEY=\$(openssl rand -hex 32)" >> .env
+              echo "CORS_ORIGINS=http://localhost" >> .env
+              echo ">> 已生成 .env 模板，请编辑填入 DEEPSEEK_API_KEY 和 CORS_ORIGINS"
             fi
 
             # 登录 GHCR（使用 GitHub token）
@@ -118,7 +120,7 @@ jobs:
               'services:' \
               '  backend:' \
               "    image: $IMG_BACKEND" \
-              '    ports: ["8000:8000"]' \
+              '    ports: ["127.0.0.1:9001:8000"]' \
               '    volumes:' \
               '      - db_data:/app/data' \
               '      - ./cases:/app/cases:ro' \
@@ -134,7 +136,7 @@ jobs:
               '      start_period: 10s' \
               '  frontend:' \
               "    image: $IMG_FRONTEND" \
-              '    ports: ["80:80"]' \
+              '    ports: ["9000:80"]' \
               '    depends_on:' \
               '      backend:' \
               '        condition: service_healthy' \

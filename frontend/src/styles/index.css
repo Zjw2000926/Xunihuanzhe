@@ -1,6 +1,6 @@
 ﻿/* ============================================================
    Virtual Patient Training System
-   铏氭嫙鎮ｈ€呯郴缁?鈥?鎶ょ悊鐥呭彶閲囬泦璁粌骞冲彴
+   虚拟患者系统 — 护理病史采集训练平台
    ============================================================ */
 
 @import './tokens.css';
@@ -676,7 +676,7 @@ body {
 .score-section ul { padding-left: 20px; }
 .score-section li { font-size: 0.84rem; color: var(--gray-600); margin-bottom: 3px; }
 
-/* Legacy pages (History, QA, Stats, Admin 鈥?kept minimal) */
+/* Legacy pages (History, QA, Stats, Admin) */
 .app-shell { display: flex; min-height: 100vh; }
 .sidebar {
   width: 200px; background: var(--gray-800); color: var(--gray-300);
@@ -788,7 +788,7 @@ body {
 .btn-outline:hover { border-color: var(--blue-500); color: var(--blue-500); }
 .btn-sm { padding: 5px 12px; font-size: 0.76rem; }
 
-/* 鈹€鈹€ Filter Bar 鈹€鈹€ */
+/* ── Filter Bar ── */
 .filter-bar {
   background: var(--gray-50);
   border: 1px solid var(--gray-200);
@@ -989,7 +989,7 @@ body {
   font-size: 0.75rem; color: var(--gray-500); margin-bottom: 4px;
 }
 
-/* 鈹€鈹€ Modal 鈹€鈹€ */
+/* ── Modal ── */
 .modal-overlay {
   position: fixed; inset: 0; z-index: 100;
   background: rgba(0,0,0,0.4);
@@ -1014,7 +1014,7 @@ body {
 }
 .modal-close:hover { color: var(--gray-700); background: var(--gray-100); }
 
-/* 鈹€鈹€ Case Editor 鈹€鈹€ */
+/* ── Case Editor ── */
 .case-editor-modal { max-width: 800px; }
 .case-editor-form { padding: 20px 24px 24px; }
 .case-editor-form fieldset {
@@ -1069,7 +1069,7 @@ body {
   font-size: 0.84rem; font-weight: 500;
 }
 
-/* 鈹€鈹€ Toast Notifications 鈹€鈹€ */
+/* ── Toast Notifications ── */
 .toast-container {
   position: fixed; top: 20px; right: 20px; z-index: 9999;
   display: flex; flex-direction: column; gap: 10px;
@@ -1129,11 +1129,70 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 3px; }
 
-/* Responsive */
+/* Mobile menu button */
+.mobile-menu-btn {
+  display: none;
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 60;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--gray-200);
+  background: #fff;
+  color: var(--gray-600);
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+/* Sidebar overlay (mobile) */
+.sidebar-overlay {
+  display: none;
+}
+
 @media (max-width: 1100px) {
 }
 @media (max-width: 768px) {
-  .sidebar { display: none; }
-  .main-content { margin-left: 0; padding: 20px 16px; }
+  .mobile-menu-btn { display: flex; }
+
+  .sidebar {
+    display: flex;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+  }
+  .sidebar.sidebar-open {
+    transform: translateX(0);
+  }
+
+  .sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 49;
+  }
+
+  .main-content {
+    margin-left: 0;
+    padding: 28px 16px 20px;
+    padding-top: 60px;
+  }
   .chart-summary-row { grid-template-columns: repeat(2, 1fr); }
+
+  .dashboard-grid { grid-template-columns: 1fr; }
+  .stats-grid { grid-template-columns: 1fr 1fr; }
+
+  .training-conversation { padding: 16px; }
+  .msg-bubble { max-width: 85%; }
+  .qa-bubble.question { margin-left: 20px; }
+  .qa-bubble.answer { margin-right: 20px; }
+  .hub-status-bar { flex-wrap: wrap; }
+  .hub-status-item { flex: 1 1 50%; border-bottom: 1px solid var(--gray-100); }
+  .hub-status-item:nth-child(2) { border-right: none; }
+  .hub-status-item:nth-child(3),
+  .hub-status-item:nth-child(4) { border-bottom: none; }
+  .login-card { padding: 32px 24px; }
 }

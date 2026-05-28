@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { BarChart3, ClipboardList, HelpCircle, Home, Settings, Stethoscope } from "lucide-react";
+import { BarChart3, ClipboardList, HelpCircle, Home, Menu, Settings, Stethoscope, X } from "lucide-react";
 
 const studentLinks = [
   { to: "/home", icon: Home, label: "首页" },
@@ -21,6 +22,9 @@ export default function AppShell({ children, user, onLogout }) {
   const navigate = useNavigate();
   const isTeacher = user?.role === "teacher";
   const links = isTeacher ? teacherLinks : studentLinks;
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const closeMenu = () => setMobileMenuOpen(false);
 
   const handleLogout = () => {
     onLogout();
@@ -29,7 +33,9 @@ export default function AppShell({ children, user, onLogout }) {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
+      {mobileMenuOpen && <div className="sidebar-overlay" onClick={closeMenu} />}
+
+      <aside className={`sidebar ${mobileMenuOpen ? "sidebar-open" : ""}`}>
         <div className="sidebar-brand">
           <h2>虚拟患者系统</h2>
           <span>护理病史采集训练</span>
@@ -43,6 +49,7 @@ export default function AppShell({ children, user, onLogout }) {
               key={link.to}
               to={link.to}
               end={link.to === "/home"}
+              onClick={closeMenu}
               className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
             >
               <Icon className="nav-icon" size={16} />
@@ -69,6 +76,13 @@ export default function AppShell({ children, user, onLogout }) {
       </aside>
 
       <main className="main-content">
+        <button
+          className="mobile-menu-btn"
+          onClick={() => setMobileMenuOpen((v) => !v)}
+          aria-label={mobileMenuOpen ? "关闭菜单" : "打开菜单"}
+        >
+          {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+        </button>
         {children}
       </main>
     </div>
