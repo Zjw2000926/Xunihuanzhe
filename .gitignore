@@ -9,9 +9,17 @@
 # Python
 __pycache__/
 *.pyc
+*.pyo
 *.egg-info/
 .venv/
 venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 测试覆盖率
+.coverage
+htmlcov/
 
 # Node
 node_modules/
