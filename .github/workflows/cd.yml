@@ -66,7 +66,7 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
-    if: secrets.SSH_HOST != ''     # 仅配置了服务器时才执行
+    if: success()
     env:
       DEPLOY_DIR: /opt/xunihuanzhe
       IMG_BACKEND: ghcr.io/${{ needs.build.outputs.owner_lc }}/xunihuanzhe-backend:${{ needs.build.outputs.version }}
