@@ -200,22 +200,28 @@ export default function ChatTraining() {
   }, [remaining, score, ending]);
 
   useEffect(() => {
+    setTimerActive(false);
+    setRemaining(null);
+    warned5Ref.current = false;
+    warned2Ref.current = false;
+    autoEndRef.current = false;
+    let cancelled = false;
     getRecordDetail(recordId).then(({ data }) => {
+      if (cancelled) return;
       setMessages(data.messages || []);
       if (data.case_name) setCaseTitle(data.case_name);
       if (data.required_inquiries) setRequiredInquiries(data.required_inquiries);
-      const limit = data.time_limit || 20;
-      const startMs = new Date(data.start_time).getTime();
-      const nowMs = Date.now();
-      const elapsed = Math.floor((nowMs - startMs) / 1000);
-      const r = Math.max(0, limit * 60 - elapsed);
+      const r = data.remaining_seconds != null
+        ? data.remaining_seconds
+        : Math.max(0, (data.time_limit || 20) * 60 - Math.floor((Date.now() - new Date(data.start_time).getTime()) / 1000));
       setRemaining(r);
       setTimerActive(true);
       if (data.messages?.length > 0) {
         const m = data.messages[0].content.match(/我是(.+?)[。，]/);
         if (m) setPatientName(m[1]);
       }
-    }).catch(() => { toast.error("加载训练记录失败"); navigate("/cases"); });
+    }).catch(() => { if (!cancelled) { toast.error("加载训练记录失败"); navigate("/cases"); } });
+    return () => { cancelled = true; };
   }, [recordId, navigate]);
 
   useEffect(() => {

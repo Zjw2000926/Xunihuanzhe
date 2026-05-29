@@ -289,6 +289,11 @@ def get_record_detail(record_id: int, current_user: User = Depends(get_current_u
     note_records = db.query(Note).filter(Note.record_id == record_id).order_by(Note.updated_at.desc()).all()
 
     case_data = case.case_data or {} if case else {}
+    time_limit = case_data.get("time_limit", 20)
+    remaining_seconds = None
+    if record.status == "in_progress" and record.start_time:
+        elapsed = (datetime.now(timezone.utc) - record.start_time).total_seconds()
+        remaining_seconds = max(0, int(time_limit * 60 - elapsed))
     return TrainingRecordDetail(
         id=record.id,
         case_id=record.case_id,
@@ -299,7 +304,8 @@ def get_record_detail(record_id: int, current_user: User = Depends(get_current_u
         scoring_error=record.scoring_error,
         start_time=record.start_time,
         end_time=record.end_time,
-        time_limit=case_data.get("time_limit", 20),
+        time_limit=time_limit,
+        remaining_seconds=remaining_seconds,
         messages=record.messages,
         score=score,
         notes=note_records,

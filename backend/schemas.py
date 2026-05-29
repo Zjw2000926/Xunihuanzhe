@@ -132,6 +132,7 @@ class TrainingRecordDetail(BaseModel):
     start_time: datetime
     end_time: Optional[datetime]
     time_limit: int = 20
+    remaining_seconds: Optional[int] = None
     messages: List[MessageItem]
     score: Optional[ScoreItem] = None
     notes: List[NoteItem] = []

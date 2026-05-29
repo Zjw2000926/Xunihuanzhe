@@ -1,10 +1,13 @@
 """LLM 调用日志服务 —— 异步队列批量写入，独立 DB session"""
 import asyncio
+import logging
 from database import SessionLocal
 from config import (
     DEEPSEEK_MODEL,
     LLM_PRICE_INPUT_PER_1M, LLM_PRICE_OUTPUT_PER_1M, LLM_COST_CURRENCY,
 )
+
+_logger = logging.getLogger(__name__)
 
 _log_queue: asyncio.Queue[dict] | None = None
 _worker_task: asyncio.Task | None = None
@@ -84,14 +87,16 @@ async def stop_worker():
 
 
 async def _worker_loop():
-    from models import LLMCallLog
     batch: list[dict] = []
     while True:
         try:
             item = await asyncio.wait_for(_log_queue.get(), timeout=2.0)
             batch.append(item)
         except asyncio.TimeoutError:
-            pass
+            if batch:
+                _flush_batch(batch)
+                batch.clear()
+            continue
         except asyncio.CancelledError:
             break
 
@@ -99,17 +104,24 @@ async def _worker_loop():
             _flush_batch(batch)
             batch.clear()
 
+    while not _log_queue.empty():
+        try:
+            batch.append(_log_queue.get_nowait())
+        except asyncio.QueueEmpty:
+            break
     if batch:
         _flush_batch(batch)
 
 
 def _flush_batch(items: list[dict]):
+    from models import LLMCallLog
+    db = SessionLocal()
     try:
-        db = SessionLocal()
         for item in items:
             db.add(LLMCallLog(**item))
         db.commit()
     except Exception:
+        _logger.exception("flush %d llm log entries failed", len(items))
         db.rollback()
     finally:
         db.close()
@@ -131,4 +143,4 @@ def enqueue_log(*, purpose, user_id=None, record_id=None, case_id=None,
     try:
         _log_queue.put_nowait(entry)
     except asyncio.QueueFull:
-        pass
+        _logger.warning("llm log queue full, dropping entry for %s", entry.get("purpose"))
