@@ -130,11 +130,26 @@ def get_stats(current_user: User = Depends(require_teacher), db: Session = Depen
     completed_records = db.query(TrainingRecord).filter(TrainingRecord.status == "completed").count()
     avg_score = db.query(func.avg(Score.total_score)).scalar()
 
+    avg_duration = db.query(func.avg(
+        (func.julianday(TrainingRecord.end_time) - func.julianday(TrainingRecord.start_time)) * 1440
+    )).filter(
+        TrainingRecord.status == "completed",
+        TrainingRecord.end_time.isnot(None),
+        TrainingRecord.start_time.isnot(None),
+    ).scalar()
+
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    today_records = db.query(func.count(TrainingRecord.id)).filter(
+        TrainingRecord.start_time >= today_start
+    ).scalar() or 0
+
     return AdminStats(
         total_students=total_students,
         total_records=total_records,
         completed_records=completed_records,
         average_score=round(float(avg_score), 1) if avg_score else None,
+        avg_duration_min=round(float(avg_duration), 1) if avg_duration else None,
+        today_records=today_records,
     )
 
 
@@ -257,7 +272,7 @@ def get_llm_logs(
     # 是否对 patient_chat 做训练级聚合
     do_agg = aggregate_patient_chat and (purpose is None or purpose == "patient_chat")
     # 是否需要返回原始（非聚合）日志
-    need_raw = (not aggregate_patient_chat) or (purpose is not None and purpose != "patient_chat")
+    need_raw = (not aggregate_patient_chat) or (purpose != "patient_chat")
 
     if do_agg:
         # ── 聚合 patient_chat，按 record_id 分组 ──

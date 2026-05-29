@@ -157,6 +157,8 @@ class AdminStats(BaseModel):
     total_records: int
     completed_records: int
     average_score: Optional[float]
+    avg_duration_min: Optional[float] = None
+    today_records: int = 0
 
 
 class QARequest(BaseModel):
